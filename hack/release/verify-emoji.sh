@@ -20,10 +20,5 @@ else
     summary="PR is a ${pr_type} change (${pr_prefix})."
 fi
 
-# get the PR (the PR sent from the event has the base branch head as the head)
-base_link=$(jq -r '.pull_request.url' < ${GITHUB_EVENT_PATH})
-head_commit=$(curl -H "Authorization: Bearer ${GITHUB_TOKEN}" -H 'Accept: application/vnd.github.antiope-preview+json' -q ${base_link} | jq -r '.head.sha')
-echo "head commit is ${head_commit}"
-
-curl https://api.github.com/repos/${GITHUB_REPOSITORY}/check-runs -XPOST -H "Authorization: Bearer ${GITHUB_TOKEN}" -H 'Accept: application/vnd.github.antiope-preview+json' -H 'Content-Type: application/json' -q --data-raw '{"name": "Verify Emoji", "head_sha": "'${head_commit}'", "conclusion": "'${conclusion}'", "status": "completed", "completed_at": "'$(date -Iseconds)'", "output": {"title": "Verify Emoji", "summary": "'"${summary}"'"}}'
-
+echo ::set-env name=CONCLUSION::${conclusion}
+echo ::set-env name=SUMMARY::${summary}

@@ -1,0 +1,15 @@
+on: pull_request
+name: PR Formatting
+jobs:
+  verify-emoji:
+    name: Verify Emoji
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Run emoji verifier
+      uses: ./hack/release
+    - name: Results
+      run: |
+        printf "*** ${CONCLUSION^^} ***\n"
+        printf "${SUMMARY}\n"
+        [[ $CONCLUSION == "success" ]] || exit 1
