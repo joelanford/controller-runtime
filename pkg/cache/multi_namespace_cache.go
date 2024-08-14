@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	toolscache "k8s.io/client-go/tools/cache"
 
+	"errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -394,6 +395,16 @@ func (i *multiNamespaceInformer) RemoveEventHandler(h toolscache.ResourceEventHa
 		}
 	}
 	return nil
+}
+
+func (i *multiNamespaceInformer) SetWatchErrorHandler(handler toolscache.WatchErrorHandler) error {
+	var errs []error
+	for _, informer := range i.namespaceToInformer {
+		if err := informer.SetWatchErrorHandler(handler); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // AddIndexers adds the indexers to each informer.

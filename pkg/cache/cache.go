@@ -121,6 +121,10 @@ type Informer interface {
 	// after an informer was started.
 	AddIndexers(indexers toolscache.Indexers) error
 
+	// SetWatchErrorHandler sets the WatchErrorHandler for the informer. This can be used
+	// to override the DefaultWatchErrorHandler set in the Options.
+	SetWatchErrorHandler(handler toolscache.WatchErrorHandler) error
+
 	// HasSynced return true if the informers underlying store has synced.
 	HasSynced() bool
 	// IsStopped returns true if the informer has been stopped.
@@ -206,8 +210,10 @@ type Options struct {
 	// to reduce the caches memory usage.
 	DefaultTransform toolscache.TransformFunc
 
-	// DefaultWatchErrorHandler will be used to the WatchErrorHandler which is called
-	// whenever ListAndWatch drops the connection with an error.
+	// DefaultWatchErrorHandler will be used as the WatchErrorHandler for all
+	// object types unless there is already one set in ByObject or
+	// DefaultNamespaces. It is called whenever there are errors returned by
+	// an informer's ListWatcher.
 	//
 	// After calling this handler, the informer will backoff and retry.
 	DefaultWatchErrorHandler toolscache.WatchErrorHandler
@@ -267,6 +273,13 @@ type ByObject struct {
 	// and for updated objects.
 	Transform toolscache.TransformFunc
 
+	// WatchErrorHandler will be used as the WatchErrorHandler for informers
+	// created for this object kind. It is called whenever there are errors
+	// returned by an informer's ListWatcher.
+	//
+	// After calling this handler, the informer will backoff and retry.
+	WatchErrorHandler toolscache.WatchErrorHandler
+
 	// UnsafeDisableDeepCopy indicates not to deep copy objects during get or
 	// list objects per GVK at the specified object.
 	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
@@ -294,6 +307,13 @@ type Config struct {
 	// Set to an empty func to prevent this:
 	// func(in interface{}) (interface{}, error) { return in, nil }
 	Transform toolscache.TransformFunc
+
+	// WatchErrorHandler specifies a WatchErrorHandler. A nil value allows to
+	// default this.
+	//
+	// Set to an empty func to prevent this:
+	// func(r *cache.Reflector, err error) {}
+	WatchErrorHandler toolscache.WatchErrorHandler
 
 	// UnsafeDisableDeepCopy specifies if List and Get requests against the
 	// cache should not DeepCopy. A nil value allows to default this.
@@ -366,6 +386,7 @@ func optionDefaultsToConfig(opts *Options) Config {
 		LabelSelector:         opts.DefaultLabelSelector,
 		FieldSelector:         opts.DefaultFieldSelector,
 		Transform:             opts.DefaultTransform,
+		WatchErrorHandler:     opts.DefaultWatchErrorHandler,
 		UnsafeDisableDeepCopy: opts.DefaultUnsafeDisableDeepCopy,
 	}
 }
@@ -375,6 +396,7 @@ func byObjectToConfig(byObject ByObject) Config {
 		LabelSelector:         byObject.Label,
 		FieldSelector:         byObject.Field,
 		Transform:             byObject.Transform,
+		WatchErrorHandler:     byObject.WatchErrorHandler,
 		UnsafeDisableDeepCopy: byObject.UnsafeDisableDeepCopy,
 	}
 }
@@ -396,7 +418,7 @@ func newCache(restConfig *rest.Config, opts Options) newCacheFunc {
 					Field: config.FieldSelector,
 				},
 				Transform:             config.Transform,
-				WatchErrorHandler:     opts.DefaultWatchErrorHandler,
+				WatchErrorHandler:     config.WatchErrorHandler,
 				UnsafeDisableDeepCopy: ptr.Deref(config.UnsafeDisableDeepCopy, false),
 				NewInformer:           opts.newInformer,
 			}),
@@ -481,6 +503,7 @@ func defaultOpts(config *rest.Config, opts Options) (Options, error) {
 			byObject.Label = defaultedConfig.LabelSelector
 			byObject.Field = defaultedConfig.FieldSelector
 			byObject.Transform = defaultedConfig.Transform
+			byObject.WatchErrorHandler = defaultedConfig.WatchErrorHandler
 			byObject.UnsafeDisableDeepCopy = defaultedConfig.UnsafeDisableDeepCopy
 		}
 
@@ -519,6 +542,9 @@ func defaultConfig(toDefault, defaultFrom Config) Config {
 	}
 	if toDefault.Transform == nil {
 		toDefault.Transform = defaultFrom.Transform
+	}
+	if toDefault.WatchErrorHandler == nil {
+		toDefault.WatchErrorHandler = defaultFrom.WatchErrorHandler
 	}
 	if toDefault.UnsafeDisableDeepCopy == nil {
 		toDefault.UnsafeDisableDeepCopy = defaultFrom.UnsafeDisableDeepCopy
